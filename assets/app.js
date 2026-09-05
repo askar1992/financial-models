@@ -10,6 +10,8 @@ const PAL = ['#2E5A88','#C79A3B','#2E7D5B','#B4442E','#6B7FA8','#8E6BA8','#3E9AA
 function baseOpts(extra={}){
   return Object.assign({
     responsive:true, maintainAspectRatio:false,
+    animation:{duration:420,easing:'easeOutCubic'},
+    transitions:{active:{animation:{duration:200}}},
     interaction:{mode:'index',intersect:false},
     plugins:{
       legend:{display:true,position:'bottom',labels:{boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'circle',font:{size:11},padding:14}},
@@ -38,12 +40,39 @@ function field(host, cfg, onchange){
 }
 function group(host,title){ const g=document.createElement('div'); g.className='grp'; g.textContent=title; host.append(g); }
 
+function animateNum(el,to,fmt){
+  const from=(typeof el._val==='number'&&isFinite(el._val))?el._val:to;
+  if(el._raf) cancelAnimationFrame(el._raf);
+  if(!isFinite(to)){ el.textContent=fmt(to); el._val=undefined; return; }
+  const t0=performance.now(), dur=450;
+  const step=t=>{
+    const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3);
+    const cur=from+(to-from)*e;
+    el._val=cur; el.textContent=fmt(cur);
+    if(k<1){ el._raf=requestAnimationFrame(step); } else { el._val=to; el.textContent=fmt(to); }
+  };
+  el._raf=requestAnimationFrame(step);
+}
+
+// плитки обновляются по месту: число доезжает от прежнего значения к новому
 function kpi(host, items){
-  host.innerHTML='';
-  items.forEach(it=>{
-    const d=document.createElement('div'); d.className='kpi';
-    d.innerHTML=`<div class="l">${it.l}</div><div class="v${it.cls?' '+it.cls:''}">${it.v}</div>${it.s?`<div class="s">${it.s}</div>`:''}`;
-    host.append(d);
+  if(host.children.length!==items.length){
+    host.innerHTML='';
+    items.forEach(()=>{
+      const d=document.createElement('div'); d.className='kpi';
+      d.innerHTML='<div class="l"></div><div class="v"></div><div class="s"></div>';
+      host.append(d);
+    });
+  }
+  items.forEach((it,i)=>{
+    const el=host.children[i];
+    el.querySelector('.l').textContent=it.l;
+    const v=el.querySelector('.v');
+    v.className='v'+(it.cls?' '+it.cls:'');
+    const sub=el.querySelector('.s');
+    sub.textContent=it.s||''; sub.style.display=it.s?'':'none';
+    if(typeof it.num==='number' && it.fmt){ animateNum(v,it.num,it.fmt); }
+    else { if(v._raf) cancelAnimationFrame(v._raf); v._val=undefined; v.textContent=it.v; }
   });
 }
 
@@ -67,4 +96,21 @@ function table(host, cols, rows){
   });
   t.append(tb);
   host.innerHTML=''; host.append(t);
+}
+
+
+// обновление графика по месту: Chart.js доводит столбцы и линии от текущих значений к новым
+const _CH={};
+function upsert(id,cfg){
+  let c=_CH[id];
+  if(!c){ _CH[id]=new Chart(document.getElementById(id),cfg); return _CH[id]; }
+  c.data.labels=cfg.data.labels;
+  cfg.data.datasets.forEach((ds,i)=>{
+    const cur=c.data.datasets[i];
+    if(cur){ Object.keys(ds).forEach(k=>{ cur[k]=ds[k]; }); }
+    else { c.data.datasets.push(ds); }
+  });
+  if(c.data.datasets.length>cfg.data.datasets.length) c.data.datasets.length=cfg.data.datasets.length;
+  c.update();
+  return c;
 }

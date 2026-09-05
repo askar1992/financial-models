@@ -75,9 +75,7 @@ G.rate=field(host,{label:'Ставка по кредиту, % годовых',mi
 G.term=field(host,{label:'Срок кредита, мес.',min:12,max:84,step:6,value:36},run);
 G.gp  =field(host,{label:'Отсрочка погашения тела, мес.',min:0,max:24,step:1,value:6},run);
 
-const CH={};
-function chart(id,cfg){ if(CH[id]){CH[id].data=cfg.data;CH[id].options=cfg.options;CH[id].update();}
-  else CH[id]=new Chart(document.getElementById(id),cfg); }
+const chart=(id,cfg)=>upsert(id,cfg);
 
 function model(){
   const p={}; for(const k in G) p[k]=G[k]();
@@ -134,11 +132,11 @@ function run(){
   const firstEb=M.findIndex(o=>o.ebitda>0);
 
   kpi(document.getElementById('kpi'),[
-    {l:'Выручка за 3 года',v:mln(sum('rev'))},
-    {l:'EBITDA за 3 года',v:mln(sum('ebitda')),cls:sum('ebitda')>=0?'pos':'neg'},
-    {l:'Рентабельность по EBITDA, год 3',v:pct(yr('rev',2)?yr('ebitda',2)/yr('rev',2):0)},
-    {l:'Чистая прибыль, год 3',v:mln(yr('np',2)),cls:yr('np',2)>=0?'pos':'neg'},
-    {l:'Минимальный остаток',v:mln(minEnd),cls:minEnd<0?'neg':''},
+    {l:'Выручка за 3 года',num:sum('rev'),fmt:mln},
+    {l:'EBITDA за 3 года',num:sum('ebitda'),fmt:mln,cls:sum('ebitda')>=0?'pos':'neg'},
+    {l:'Рентабельность по EBITDA, год 3',num:yr('rev',2)?yr('ebitda',2)/yr('rev',2):0,fmt:v=>pct(v)},
+    {l:'Чистая прибыль, год 3',num:yr('np',2),fmt:mln,cls:yr('np',2)>=0?'pos':'neg'},
+    {l:'Минимальный остаток',num:minEnd,fmt:mln,cls:minEnd<0?'neg':''},
     {l:'EBITDA выходит в плюс',v: firstEb>=0? 'М'+(firstEb+1):'нет'}
   ]);
 
@@ -154,9 +152,9 @@ function run(){
               ['Коммунальные','util'],['Прочие постоянные','othf']].map(([n,k])=>[n,Math.abs(sum(k))]);
   const tot=cost.reduce((a,b)=>a+b[1],0);
   chart('c4',{type:'doughnut',data:{labels:cost.map(c=>c[0]),datasets:[{data:cost.map(c=>c[1]),backgroundColor:PAL,borderWidth:2,borderColor:'#fff'}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',animation:{duration:420,easing:'easeOutCubic'},
       plugins:{legend:{position:'right',labels:{boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'circle',font:{size:10.5}}},
-        tooltip:{callbacks:{label:c=>` ${c.label}: ${mln(c.parsed)} (${pct(c.parsed/tot)})`}}}}});
+        tooltip:{callbacks:{label:c=>` ${c.label}: ${mln(c.parsed)} (${pct(c.parsed/c.dataset.data.reduce((a,b)=>a+b,0))})`}}}}});
   chart('c5',{type:'line',data:{labels:lab,datasets:S.map((s,k)=>({label:s.n,data:M.map(o=>o.q[k]),
     borderColor:PAL[k],tension:.25,pointRadius:0}))},options:baseOpts()});
 

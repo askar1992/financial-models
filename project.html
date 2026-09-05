@@ -8,7 +8,7 @@
 <style>
 .heat{border-collapse:separate;border-spacing:3px;font-size:12px;font-variant-numeric:tabular-nums}
 .heat th{font-weight:600;color:#33415C;font-size:11.5px;padding:5px 8px}
-.heat td{padding:8px 10px;text-align:right;border-radius:7px;font-weight:600;color:#fff;min-width:88px}
+.heat td{padding:8px 10px;text-align:right;border-radius:7px;font-weight:600;color:#fff;min-width:88px;transition:background-color .45s ease}
 .heat td.rowhead{background:#EEF2F7;color:#33415C;text-align:left;font-weight:600}
 .legend{font-size:11.5px;color:var(--muted);margin-top:10px}
 </style>
@@ -82,9 +82,7 @@ G.cit =field(host,{label:'Ставка КПН, %',min:0,max:0.3,step:0.01,value:
 G.mult=field(host,{label:'Множитель к EBITDA при выходе',min:0,max:10,step:0.5,value:5,fmt:v=>fmt(v,1)+'×'},run);
 G.cov =field(host,{label:'Ковенант банка по DSCR',min:1,max:2,step:0.05,value:1.25,fmt:v=>fmt(v,2)},run);
 
-const CH={};
-function chart(id,cfg){ if(CH[id]){CH[id].data=cfg.data;CH[id].options=cfg.options;CH[id].update();}
-  else CH[id]=new Chart(document.getElementById(id),cfg); }
+const chart=(id,cfg)=>upsert(id,cfg);
 
 function irr(cf){
   let lo=-0.9, hi=3, f=r=>cf.reduce((a,v,i)=>a+v/Math.pow(1+r,i),0);
@@ -161,12 +159,12 @@ function run(){
   const lab=M.map((_,i)=>'Год '+i);
 
   kpi(document.getElementById('kpi'),[
-    {l:'Инвестиции в проект',v:mln(capTot)},
-    {l:'NPV проекта',v:mln(npv),cls:npv>=0?'pos':'neg',s:'ставка '+pct(wacc)},
-    {l:'IRR проекта',v:pct(irrP),cls:irrP>=wacc?'pos':'neg'},
-    {l:'IRR собственника',v:pct(irrE),cls:irrE>=p.re?'pos':'neg'},
+    {l:'Инвестиции в проект',num:capTot,fmt:mln},
+    {l:'NPV проекта',num:npv,fmt:mln,cls:npv>=0?'pos':'neg',s:'ставка '+pct(wacc)},
+    {l:'IRR проекта',num:irrP,fmt:v=>pct(v),cls:irrP>=wacc?'pos':'neg'},
+    {l:'IRR собственника',num:irrE,fmt:v=>pct(v),cls:irrE>=p.re?'pos':'neg'},
     {l:'Окупаемость',v: pay>=0? pay+' лет':'>10 лет'},
-    {l:'Минимальный DSCR',v: isFinite(minD)? fmt(minD,2):'—', cls: minD<p.cov?'neg':'pos', s:'ковенант '+fmt(p.cov,2)}
+    {l:'Минимальный DSCR',num:isFinite(minD)?minD:NaN,fmt:v=>fmt(v,2), cls: minD<p.cov?'neg':'pos', s:'ковенант '+fmt(p.cov,2)}
   ]);
 
   chart('c1',{type:'bar',data:{labels:lab,datasets:[
@@ -176,9 +174,9 @@ function run(){
     borderColor:npv>=0?PAL[2]:PAL[3],backgroundColor:npv>=0?'rgba(46,125,91,.12)':'rgba(180,68,46,.12)',fill:true,tension:.25,pointRadius:2}]},options:baseOpts()});
   const inv=[['Земля',p.land],['Проектирование',p.des],['Дома',p.house*p.n],['Сети и благоустройство',p.eng],['Мебель и оборудование',p.fur]];
   chart('c3',{type:'doughnut',data:{labels:inv.map(i=>i[0]),datasets:[{data:inv.map(i=>i[1]),backgroundColor:PAL,borderWidth:2,borderColor:'#fff'}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',animation:{duration:420,easing:'easeOutCubic'},
       plugins:{legend:{position:'right',labels:{boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'circle',font:{size:11}}},
-        tooltip:{callbacks:{label:c=>` ${c.label}: ${mln(c.parsed)} (${pct(c.parsed/capTot)})`}}}}});
+        tooltip:{callbacks:{label:c=>` ${c.label}: ${mln(c.parsed)} (${pct(c.parsed/c.dataset.data.reduce((a,b)=>a+b,0))})`}}}}});
   chart('c4',{type:'line',data:{labels:lab,datasets:[{label:'Загрузка',data:M.map(o=>o.occ*100),
     borderColor:PAL[0],backgroundColor:'rgba(46,90,136,.12)',fill:true,tension:.3,pointRadius:2}]},
     options:baseOpts({scales:{x:{grid:{display:false},ticks:{font:{size:10}}},
@@ -198,17 +196,24 @@ function run(){
     return r.M[r.M.length-1].cum;
   }));
   const flat=vals.flat(); const mx=Math.max(...flat.map(Math.abs))||1;
-  let html='<tr><th></th>'+dTar.map(b=>`<th>тариф ${b>0?'+':''}${Math.round(b*100)}%</th>`).join('')+'</tr>';
-  vals.forEach((rowv,i)=>{
-    html+=`<tr><td class="rowhead">загрузка ${pct(p.occ1+dOcc[i],0)}</td>`;
-    rowv.forEach(v=>{
-      const t=Math.min(1,Math.abs(v)/mx);
-      const col = v>=0 ? `rgba(46,125,91,${0.25+0.65*t})` : `rgba(180,68,46,${0.25+0.65*t})`;
-      html+=`<td style="background:${col}">${mln(v)}</td>`;
+  const heat=document.getElementById('heat');
+  if(!heat.dataset.built){
+    let html='<tr><th></th>'+dTar.map(b=>`<th>тариф ${b>0?'+':''}${Math.round(b*100)}%</th>`).join('')+'</tr>';
+    vals.forEach((rowv,i)=>{
+      html+=`<tr><td class="rowhead"></td>`+rowv.map(()=>'<td></td>').join('')+'</tr>';
     });
-    html+='</tr>';
+    heat.innerHTML=html; heat.dataset.built='1';
+  }
+  vals.forEach((rowv,i)=>{
+    const tr=heat.rows[i+1];
+    tr.cells[0].textContent='загрузка '+pct(p.occ1+dOcc[i],0);
+    rowv.forEach((v,j)=>{
+      const td=tr.cells[j+1];
+      const t=Math.min(1,Math.abs(v)/mx);
+      td.style.background = v>=0 ? `rgba(46,125,91,${0.25+0.65*t})` : `rgba(180,68,46,${0.25+0.65*t})`;
+      animateNum(td, v, mln);
+    });
   });
-  document.getElementById('heat').innerHTML=html;
 
   const cols=['Статья',...lab,'Итого'];
   const sum=k=>M.reduce((a,o)=>a+o[k],0);
