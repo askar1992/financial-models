@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Кофейня — базовая финансовая модель</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="top"><div class="wrap">
+  <a class="back" href="index.html">← ко всем моделям</a>
+  <h1>Кофейня — базовая финансовая модель</h1>
+  <p>Прибыли и убытки вместе с движением денег, 12 месяцев. Двигайте вводные слева — вся модель пересчитывается сразу. Данные синтетические.</p>
+</div></div>
+
+<div class="wrap">
+<div class="layout">
+  <div class="panel inputs"><h2>Вводные</h2><div class="body" id="inp"></div></div>
+  <div>
+    <div class="kpis" id="kpi"></div>
+    <div class="charts">
+      <div class="chartbox"><h3>Выручка по месяцам</h3><div class="cw"><canvas id="c1"></canvas></div></div>
+      <div class="chartbox"><h3>EBITDA и чистая прибыль</h3><div class="cw"><canvas id="c2"></canvas></div></div>
+      <div class="chartbox"><h3>Остаток денег на конец месяца</h3><div class="cw"><canvas id="c3"></canvas></div></div>
+      <div class="chartbox"><h3>Структура расходов за год</h3><div class="cw"><canvas id="c4"></canvas></div></div>
+    </div>
+    <div class="panel" style="margin-bottom:20px"><h2>Прибыли и убытки</h2><div class="tablewrap" id="t1"></div></div>
+    <div class="panel" style="margin-bottom:20px"><h2>Движение денежных средств</h2><div class="tablewrap" id="t2"></div></div>
+    <p class="note">Пример из витрины. Все цифры условные и не относятся к какому-либо действующему бизнесу.</p>
+  </div>
+</div>
+</div>
+<div class="foot"><div class="wrap">Примеры финансовых моделей. Данные во всех примерах синтетические.</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="assets/app.js"></script>
+<script>
+const host=document.getElementById('inp'); const G={};
+group(host,'Продажи');
+G.chk =field(host,{label:'Средний чек, ₸',min:800,max:6000,step:50,value:2200,fmt:v=>fmt(v)+' ₸'},run);
+G.pday=field(host,{label:'Чеков в день, месяц 1',min:15,max:200,step:1,value:45},run);
+G.gr  =field(host,{label:'Прирост чеков, % в месяц',min:0,max:0.2,step:0.005,value:0.06,fmt:v=>pct(v)},run);
+G.days=field(host,{label:'Рабочих дней в месяце',min:20,max:31,step:1,value:30},run);
+group(host,'Себестоимость и расходы');
+G.cogs=field(host,{label:'Себестоимость, % от выручки',min:0.15,max:0.6,step:0.01,value:0.32,fmt:v=>pct(v,0)},run);
+G.rent=field(host,{label:'Аренда, ₸ в месяц',min:100000,max:2500000,step:25000,value:600000,fmt:v=>fmt(v)+' ₸'},run);
+G.fot =field(host,{label:'Фонд оплаты труда на руки, ₸/мес',min:200000,max:4000000,step:50000,value:1100000,fmt:v=>fmt(v)+' ₸'},run);
+G.ftx =field(host,{label:'Налоги с ФОТ, % к сумме на руки',min:0,max:0.5,step:0.01,value:0.27,fmt:v=>pct(v,0)},run);
+G.util=field(host,{label:'Коммунальные и связь, ₸/мес',min:20000,max:800000,step:10000,value:120000,fmt:v=>fmt(v)+' ₸'},run);
+G.mkt =field(host,{label:'Маркетинг, % от выручки',min:0,max:0.15,step:0.005,value:0.03,fmt:v=>pct(v,1)},run);
+G.oth =field(host,{label:'Прочие расходы, ₸/мес',min:0,max:600000,step:10000,value:90000,fmt:v=>fmt(v)+' ₸'},run);
+group(host,'Налоги и инвестиции');
+G.tax =field(host,{label:'Налог с оборота, %',min:0,max:0.1,step:0.005,value:0.04,fmt:v=>pct(v,1)},run);
+G.cap =field(host,{label:'Инвестиции на старте, ₸',min:2000000,max:60000000,step:500000,value:14000000,fmt:v=>mln(v)},run);
+G.am  =field(host,{label:'Срок амортизации, лет',min:3,max:10,step:1,value:5},run);
+G.eq  =field(host,{label:'Собственные средства, ₸',min:5000000,max:80000000,step:1000000,value:20000000,fmt:v=>mln(v)},run);
+
+const CH={};
+function chart(id,cfg){ if(CH[id]){CH[id].data=cfg.data; CH[id].options=cfg.options; CH[id].update();}
+  else CH[id]=new Chart(document.getElementById(id),cfg); }
+
+function model(){
+  const p={}; for(const k in G) p[k]=G[k]();
+  const N=12, M=[];
+  let prevEnd=0, cumNp=0;
+  for(let i=0;i<N;i++){
+    const o={};
+    o.pd  = i===0? p.pday : M[i-1].pd*(1+p.gr);
+    o.rev = o.pd*p.days*p.chk;
+    o.cogs= -o.rev*p.cogs;
+    o.gross=o.rev+o.cogs;
+    o.rent=-p.rent; o.fot=-p.fot*(1+p.ftx); o.util=-p.util; o.mkt=-o.rev*p.mkt; o.oth=-p.oth;
+    o.opex=o.rent+o.fot+o.util+o.mkt+o.oth;
+    o.ebitda=o.gross+o.opex;
+    o.amort=-p.cap/p.am/12;
+    o.tax=-o.rev*p.tax;
+    o.np=o.ebitda+o.amort+o.tax;
+    cumNp+=o.np; o.cum=cumNp;
+    o.beg=prevEnd;
+    o.capex = i===0? -p.cap : 0;
+    o.eq    = i===0? p.eq : 0;
+    o.net = o.rev+o.cogs+o.opex+o.tax+o.capex+o.eq;
+    o.end = o.beg+o.net; prevEnd=o.end;
+    M.push(o);
+  }
+  const fix = p.rent+p.fot*(1+p.ftx)+p.util+p.oth;
+  const cmr = 1-p.cogs-p.mkt-p.tax;
+  const beRev = cmr>0? fix/cmr : NaN;
+  return {p,M,beRev,beChk: beRev/p.chk/p.days};
+}
+
+function run(){
+  const {p,M,beRev,beChk}=model();
+  const lab=M.map((_,i)=>'М'+(i+1));
+  const sum=k=>M.reduce((a,o)=>a+o[k],0);
+  const revY=sum('rev'), npY=sum('np');
+  const firstProfit=M.findIndex(o=>o.np>0);
+  const minEnd=Math.min(...M.map(o=>o.end));
+
+  kpi(document.getElementById('kpi'),[
+    {l:'Выручка за год',v:mln(revY)},
+    {l:'Чистая прибыль за год',v:mln(npY),cls:npY>=0?'pos':'neg'},
+    {l:'Рентабельность',v:pct(revY?npY/revY:0)},
+    {l:'Первый прибыльный месяц',v: firstProfit>=0? 'М'+(firstProfit+1) : 'нет'},
+    {l:'Безубыточность, чеков в день',v: isFinite(beChk)? fmt(beChk,1):'—', s:'сейчас '+fmt(M[11].pd,0)+' в мес. 12'},
+    {l:'Минимальный остаток',v:mln(minEnd),cls:minEnd<0?'neg':''}
+  ]);
+
+  chart('c1',{type:'bar',data:{labels:lab,datasets:[{label:'Выручка',data:M.map(o=>o.rev),backgroundColor:PAL[0],borderRadius:3}]},options:baseOpts()});
+  chart('c2',{type:'line',data:{labels:lab,datasets:[
+      {label:'EBITDA',data:M.map(o=>o.ebitda),borderColor:PAL[1],backgroundColor:PAL[1],tension:.3,pointRadius:2},
+      {label:'Чистая прибыль',data:M.map(o=>o.np),borderColor:PAL[2],backgroundColor:PAL[2],tension:.3,pointRadius:2}]},options:baseOpts()});
+  chart('c3',{type:'line',data:{labels:lab,datasets:[{label:'Остаток на счёте',data:M.map(o=>o.end),
+      borderColor:PAL[0],backgroundColor:'rgba(46,90,136,.12)',fill:true,tension:.3,pointRadius:2}]},options:baseOpts()});
+  const cost=[['Себестоимость','cogs'],['Аренда','rent'],['Оплата труда','fot'],['Коммунальные','util'],['Маркетинг','mkt'],['Прочие','oth'],['Налог','tax']]
+    .map(([n,k])=>[n,Math.abs(sum(k))]);
+  chart('c4',{type:'doughnut',data:{labels:cost.map(c=>c[0]),datasets:[{data:cost.map(c=>c[1]),backgroundColor:PAL,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+      plugins:{legend:{position:'right',labels:{boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'circle',font:{size:11}}},
+      tooltip:{callbacks:{label:c=>` ${c.label}: ${mln(c.parsed)} (${pct(c.parsed/cost.reduce((a,b)=>a+b[1],0))})`}}}}});
+
+  const cols=['Статья',...lab,'Итого'];
+  const row=(name,k,type)=>({name,type,vals:[...M.map(o=>o[k]),sum(k)]});
+  table(document.getElementById('t1'),cols,[
+    {name:'Чеков в день',vals:[...M.map(o=>Math.round(o.pd)),'']},
+    row('Выручка','rev','b'),
+    row('Себестоимость','cogs'),
+    row('Валовая прибыль','gross','b'),
+    {name:'Аренда',vals:[...M.map(o=>o.rent),sum('rent')]},
+    row('Оплата труда с налогами','fot'),
+    row('Коммунальные и связь','util'),
+    row('Маркетинг','mkt'),
+    row('Прочие','oth'),
+    row('EBITDA','ebitda','b'),
+    row('Амортизация','amort'),
+    row('Налог с оборота','tax'),
+    row('Чистая прибыль','np','b')
+  ]);
+  table(document.getElementById('t2'),cols,[
+    {name:'Остаток на начало',vals:[...M.map(o=>o.beg),'']},
+    row('Поступления от продаж','rev'),
+    row('Оплата поставщикам','cogs'),
+    row('Операционные расходы','opex'),
+    row('Налог с оборота','tax'),
+    row('Инвестиции','capex'),
+    row('Взнос собственника','eq'),
+    row('Кассовый итог','net','b'),
+    {name:'Остаток на конец',type:'b',vals:[...M.map(o=>o.end),'']}
+  ]);
+}
+run();
+</script>
+</body>
+</html>

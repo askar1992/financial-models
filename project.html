@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>База отдыха — проектная модель</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+.heat{border-collapse:separate;border-spacing:3px;font-size:12px;font-variant-numeric:tabular-nums}
+.heat th{font-weight:600;color:#33415C;font-size:11.5px;padding:5px 8px}
+.heat td{padding:8px 10px;text-align:right;border-radius:7px;font-weight:600;color:#fff;min-width:88px}
+.heat td.rowhead{background:#EEF2F7;color:#33415C;text-align:left;font-weight:600}
+.legend{font-size:11.5px;color:var(--muted);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="top"><div class="wrap">
+  <a class="back" href="index.html">← ко всем моделям</a>
+  <h1>База отдыха на 12 гостевых домов — проектная модель</h1>
+  <p>Строительство 24 месяца, эксплуатация 9 лет. Ставка дисконтирования считается как средневзвешенная стоимость капитала, поток разделён на поток проекта и поток собственника, обслуживание долга проверяется коэффициентом DSCR. Данные синтетические.</p>
+</div></div>
+
+<div class="wrap">
+<div class="layout">
+  <div class="panel inputs"><h2>Вводные</h2><div class="body" id="inp"></div></div>
+  <div>
+    <div class="kpis" id="kpi"></div>
+    <div class="charts">
+      <div class="chartbox"><h3>Выручка и EBITDA по годам</h3><div class="cw"><canvas id="c1"></canvas></div></div>
+      <div class="chartbox"><h3>Накопленный дисконтированный поток</h3><div class="cw"><canvas id="c2"></canvas></div></div>
+      <div class="chartbox"><h3>Структура инвестиций</h3><div class="cw"><canvas id="c3"></canvas></div></div>
+      <div class="chartbox"><h3>Загрузка по годам</h3><div class="cw"><canvas id="c4"></canvas></div></div>
+      <div class="chartbox"><h3>Обслуживание долга: DSCR и остаток долга</h3><div class="cw"><canvas id="c5"></canvas></div></div>
+      <div class="chartbox"><h3>Освоение инвестиций по месяцам</h3><div class="cw"><canvas id="c6"></canvas></div></div>
+    </div>
+    <div class="panel" style="margin-bottom:20px"><h2>Чувствительность: NPV проекта, ₸</h2>
+      <div class="body"><div style="overflow-x:auto"><table class="heat" id="heat"></table></div>
+      <div class="legend">По строкам — загрузка на выходе, по столбцам — отклонение среднего тарифа. Зелёные ячейки — проект окупает стоимость капитала, красные — нет.</div></div></div>
+    <div class="panel" style="margin-bottom:20px"><h2>Модель по годам</h2><div class="tablewrap" id="t1"></div></div>
+    <p class="note">Пример из витрины. Все цифры условные и не относятся к какому-либо действующему проекту.</p>
+  </div>
+</div>
+</div>
+<div class="foot"><div class="wrap">Примеры финансовых моделей. Данные во всех примерах синтетические.</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="assets/app.js"></script>
+<script>
+const host=document.getElementById('inp'); const G={};
+group(host,'Инвестиции');
+G.land=field(host,{label:'Земельный участок, ₸',min:0,max:100000000,step:1000000,value:25000000,fmt:v=>mln(v)},run);
+G.des =field(host,{label:'Проектирование, ₸',min:0,max:60000000,step:1000000,value:15000000,fmt:v=>mln(v)},run);
+G.house=field(host,{label:'Стоимость одного дома, ₸',min:5000000,max:40000000,step:500000,value:15000000,fmt:v=>mln(v)},run);
+G.n   =field(host,{label:'Количество домов',min:4,max:40,step:1,value:12},run);
+G.eng =field(host,{label:'Сети и благоустройство, ₸',min:0,max:200000000,step:5000000,value:60000000,fmt:v=>mln(v)},run);
+G.fur =field(host,{label:'Мебель и оборудование, ₸',min:0,max:120000000,step:2000000,value:36000000,fmt:v=>mln(v)},run);
+group(host,'Эксплуатация');
+G.tar =field(host,{label:'Средний тариф за ночь, ₸',min:15000,max:150000,step:1000,value:55000,fmt:v=>fmt(v)+' ₸'},run);
+G.tgr =field(host,{label:'Индексация тарифа, % в год',min:0,max:0.2,step:0.005,value:0.07,fmt:v=>pct(v,1)},run);
+G.occ0=field(host,{label:'Загрузка в первый год, %',min:0.1,max:0.8,step:0.01,value:0.38,fmt:v=>pct(v,0)},run);
+G.occ1=field(host,{label:'Загрузка на выходе, %',min:0.2,max:0.9,step:0.01,value:0.55,fmt:v=>pct(v,0)},run);
+G.ramp=field(host,{label:'Лет до целевой загрузки',min:1,max:6,step:1,value:3},run);
+G.addr=field(host,{label:'Доп. доходы, % к размещению',min:0,max:0.8,step:0.05,value:0.3,fmt:v=>pct(v,0)},run);
+group(host,'Операционные расходы');
+G.varc=field(host,{label:'Переменные расходы, % от выручки',min:0.05,max:0.5,step:0.01,value:0.22,fmt:v=>pct(v,0)},run);
+G.fot =field(host,{label:'ФОТ на руки, ₸ в год',min:5000000,max:100000000,step:1000000,value:28000000,fmt:v=>mln(v)},run);
+G.ftx =field(host,{label:'Налоги с ФОТ, %',min:0,max:0.5,step:0.01,value:0.27,fmt:v=>pct(v,0)},run);
+G.util=field(host,{label:'Коммунальные, ₸ в год',min:1000000,max:50000000,step:1000000,value:11000000,fmt:v=>mln(v)},run);
+G.rep =field(host,{label:'Ремонт и содержание, ₸ в год',min:0,max:40000000,step:1000000,value:7000000,fmt:v=>mln(v)},run);
+G.mkt =field(host,{label:'Маркетинг, % от выручки',min:0,max:0.25,step:0.005,value:0.08,fmt:v=>pct(v,1)},run);
+G.adm =field(host,{label:'Управление и прочие, ₸ в год',min:0,max:40000000,step:1000000,value:8000000,fmt:v=>mln(v)},run);
+G.cidx=field(host,{label:'Индексация расходов, % в год',min:0,max:0.2,step:0.005,value:0.06,fmt:v=>pct(v,1)},run);
+group(host,'Финансирование и стоимость капитала');
+G.eq  =field(host,{label:'Собственные средства, ₸',min:0,max:500000000,step:4000000,value:216000000,fmt:v=>mln(v)},run);
+G.debt=field(host,{label:'Кредит, ₸',min:0,max:400000000,step:4000000,value:100000000,fmt:v=>mln(v)},run);
+G.rate=field(host,{label:'Ставка по кредиту, % годовых',min:0,max:0.35,step:0.005,value:0.18,fmt:v=>pct(v,1)},run);
+G.term=field(host,{label:'Срок кредита, лет',min:3,max:15,step:1,value:10},run);
+G.gp  =field(host,{label:'Отсрочка погашения тела, лет',min:0,max:5,step:1,value:3},run);
+G.re  =field(host,{label:'Требуемая доходность собственника, %',min:0.08,max:0.4,step:0.005,value:0.18,fmt:v=>pct(v,1)},run);
+G.amY =field(host,{label:'Срок амортизации, лет',min:5,max:30,step:1,value:15},run);
+G.cit =field(host,{label:'Ставка КПН, %',min:0,max:0.3,step:0.01,value:0.2,fmt:v=>pct(v,0)},run);
+G.mult=field(host,{label:'Множитель к EBITDA при выходе',min:0,max:10,step:0.5,value:5,fmt:v=>fmt(v,1)+'×'},run);
+G.cov =field(host,{label:'Ковенант банка по DSCR',min:1,max:2,step:0.05,value:1.25,fmt:v=>fmt(v,2)},run);
+
+const CH={};
+function chart(id,cfg){ if(CH[id]){CH[id].data=cfg.data;CH[id].options=cfg.options;CH[id].update();}
+  else CH[id]=new Chart(document.getElementById(id),cfg); }
+
+function irr(cf){
+  let lo=-0.9, hi=3, f=r=>cf.reduce((a,v,i)=>a+v/Math.pow(1+r,i),0);
+  if(f(lo)*f(hi)>0) return NaN;
+  for(let i=0;i<200;i++){ const m=(lo+hi)/2; (f(lo)*f(m)<=0)? hi=m : lo=m; }
+  return (lo+hi)/2;
+}
+const WTS=[0,0,0,0,2,3,5,7,9,10,11,11,10,9,7,5,3,2,0,0,0,0,0,0];
+const WSUM=WTS.reduce((a,b)=>a+b,0);
+
+function build(p, occTarget, tarBase){
+  const Y=11, capTot=p.land+p.des+p.house*p.n+p.eng+p.fur;
+  // помесячное освоение 24 мес
+  const mon=[];
+  for(let i=0;i<24;i++){
+    let v=0;
+    if(i===0) v+=p.land;
+    if(i<4) v+=p.des/4;
+    v += p.house*p.n*WTS[i]/WSUM;
+    if(i>=4&&i<20) v+=p.eng/16;
+    if(i>=18) v+=p.fur/6;
+    mon.push(v);
+  }
+  const capY=[mon.slice(0,12).reduce((a,b)=>a+b,0), mon.slice(12).reduce((a,b)=>a+b,0)];
+  const M=[]; let debt=0;
+  const drawTot=Math.min(p.debt, capTot);
+  for(let i=0;i<Y;i++){
+    const o={};
+    o.capex = i<2? -capY[i] : 0;
+    o.draw  = i<2? drawTot*(capY[i]/(capY[0]+capY[1])) : 0;
+    o.occ = i<2? 0 : Math.min(occTarget, p.occ0+(occTarget-p.occ0)*Math.min(1,(i-2)/p.ramp));
+    o.tar = i<2? 0 : tarBase*Math.pow(1+p.tgr,i-2);
+    o.nights = i<2? 0 : p.n*365*o.occ;
+    o.acc = o.nights*o.tar;
+    o.add = o.acc*p.addr;
+    o.rev = o.acc+o.add;
+    const k=Math.pow(1+p.cidx,Math.max(0,i-2));
+    o.varc=-o.rev*p.varc; o.mkt=-o.rev*p.mkt;
+    o.fot = i<2?0:-p.fot*(1+p.ftx)*k;
+    o.util= i<2?0:-p.util*k;
+    o.rep = i<2?0:-p.rep*k;
+    o.adm = i<2?0:-p.adm*k;
+    o.opex=o.varc+o.mkt+o.fot+o.util+o.rep+o.adm;
+    o.ebitda=o.rev+o.opex;
+    o.int = -debt*p.rate;
+    debt += o.draw;
+    o.repay = (i<2 || i<p.gp || debt<=0) ? 0 : -Math.min(drawTot/(p.term-p.gp), debt);
+    debt = Math.max(0, debt+o.repay);
+    o.debt=debt;
+    o.amort = i<2? 0 : -(capTot-p.land)/p.amY;
+    o.ebt = o.ebitda+o.amort+o.int;
+    o.citv= -Math.max(0,o.ebt)*p.cit;
+    o.np  = o.ebt+o.citv;
+    o.dscr = (i>=2 && -(o.int+o.repay)>1000) ? (o.ebitda+o.citv)/(-(o.int+o.repay)) : null;
+    o.term = i===Y-1? o.ebitda*p.mult : 0;
+    o.fcf = o.ebitda+o.citv+o.capex+o.term;
+    o.fcfe= o.fcf+o.draw+o.int+o.repay-(i===Y-1? o.debt:0);
+    M.push(o);
+  }
+  const wacc = (p.debt+p.eq)>0 ? (p.debt/(p.debt+p.eq))*p.rate*(1-p.cit)+(p.eq/(p.debt+p.eq))*p.re : p.re;
+  let cum=0;
+  M.forEach((o,i)=>{ o.df=1/Math.pow(1+wacc,i); o.dfcf=o.fcf*o.df; cum+=o.dfcf; o.cum=cum; });
+  return {M,capTot,wacc,mon};
+}
+
+function run(){
+  const p={}; for(const k in G) p[k]=G[k]();
+  const {M,capTot,wacc,mon}=build(p,p.occ1,p.tar);
+  const npv=M[M.length-1].cum;
+  const irrP=irr(M.map(o=>o.fcf)), irrE=irr(M.map(o=>o.fcfe));
+  const pay=M.findIndex(o=>o.cum>0);
+  const dscrs=M.map(o=>o.dscr).filter(v=>v!==null&&isFinite(v));
+  const minD=dscrs.length?Math.min(...dscrs):NaN;
+  const lab=M.map((_,i)=>'Год '+i);
+
+  kpi(document.getElementById('kpi'),[
+    {l:'Инвестиции в проект',v:mln(capTot)},
+    {l:'NPV проекта',v:mln(npv),cls:npv>=0?'pos':'neg',s:'ставка '+pct(wacc)},
+    {l:'IRR проекта',v:pct(irrP),cls:irrP>=wacc?'pos':'neg'},
+    {l:'IRR собственника',v:pct(irrE),cls:irrE>=p.re?'pos':'neg'},
+    {l:'Окупаемость',v: pay>=0? pay+' лет':'>10 лет'},
+    {l:'Минимальный DSCR',v: isFinite(minD)? fmt(minD,2):'—', cls: minD<p.cov?'neg':'pos', s:'ковенант '+fmt(p.cov,2)}
+  ]);
+
+  chart('c1',{type:'bar',data:{labels:lab,datasets:[
+    {label:'Выручка',data:M.map(o=>o.rev),backgroundColor:PAL[0],borderRadius:3},
+    {label:'EBITDA',data:M.map(o=>o.ebitda),backgroundColor:PAL[1],borderRadius:3}]},options:baseOpts()});
+  chart('c2',{type:'line',data:{labels:lab,datasets:[{label:'Накопленный дисконтированный поток',data:M.map(o=>o.cum),
+    borderColor:npv>=0?PAL[2]:PAL[3],backgroundColor:npv>=0?'rgba(46,125,91,.12)':'rgba(180,68,46,.12)',fill:true,tension:.25,pointRadius:2}]},options:baseOpts()});
+  const inv=[['Земля',p.land],['Проектирование',p.des],['Дома',p.house*p.n],['Сети и благоустройство',p.eng],['Мебель и оборудование',p.fur]];
+  chart('c3',{type:'doughnut',data:{labels:inv.map(i=>i[0]),datasets:[{data:inv.map(i=>i[1]),backgroundColor:PAL,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+      plugins:{legend:{position:'right',labels:{boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'circle',font:{size:11}}},
+        tooltip:{callbacks:{label:c=>` ${c.label}: ${mln(c.parsed)} (${pct(c.parsed/capTot)})`}}}}});
+  chart('c4',{type:'line',data:{labels:lab,datasets:[{label:'Загрузка',data:M.map(o=>o.occ*100),
+    borderColor:PAL[0],backgroundColor:'rgba(46,90,136,.12)',fill:true,tension:.3,pointRadius:2}]},
+    options:baseOpts({scales:{x:{grid:{display:false},ticks:{font:{size:10}}},
+      y:{grid:{color:'#EDF1F6'},border:{display:false},ticks:{font:{size:10},callback:v=>v+'%'}}}})});
+  chart('c5',{type:'bar',data:{labels:lab,datasets:[
+    {type:'line',label:'DSCR',data:M.map(o=>o.dscr),borderColor:PAL[1],yAxisID:'y1',tension:.25,pointRadius:3},
+    {label:'Остаток долга',data:M.map(o=>o.debt),backgroundColor:'rgba(46,90,136,.35)',borderRadius:3,yAxisID:'y'}]},
+    options:baseOpts({scales:{x:{grid:{display:false},ticks:{font:{size:10}}},
+      y:{position:'left',grid:{color:'#EDF1F6'},border:{display:false},ticks:{font:{size:10},callback:v=>fmt(v/1e6,0)+'м'}},
+      y1:{position:'right',grid:{display:false},border:{display:false},ticks:{font:{size:10}}}}})});
+  chart('c6',{type:'bar',data:{labels:mon.map((_,i)=>'М'+(i+1)),datasets:[{label:'Освоение за месяц',data:mon,backgroundColor:PAL[0],borderRadius:2}]},options:baseOpts()});
+
+  // тепловая карта чувствительности
+  const dOcc=[-0.10,-0.05,0,0.05,0.10], dTar=[-0.10,-0.05,0,0.05,0.10];
+  const vals=dOcc.map(a=>dTar.map(b=>{
+    const r=build(p, p.occ1+a, p.tar*(1+b));
+    return r.M[r.M.length-1].cum;
+  }));
+  const flat=vals.flat(); const mx=Math.max(...flat.map(Math.abs))||1;
+  let html='<tr><th></th>'+dTar.map(b=>`<th>тариф ${b>0?'+':''}${Math.round(b*100)}%</th>`).join('')+'</tr>';
+  vals.forEach((rowv,i)=>{
+    html+=`<tr><td class="rowhead">загрузка ${pct(p.occ1+dOcc[i],0)}</td>`;
+    rowv.forEach(v=>{
+      const t=Math.min(1,Math.abs(v)/mx);
+      const col = v>=0 ? `rgba(46,125,91,${0.25+0.65*t})` : `rgba(180,68,46,${0.25+0.65*t})`;
+      html+=`<td style="background:${col}">${mln(v)}</td>`;
+    });
+    html+='</tr>';
+  });
+  document.getElementById('heat').innerHTML=html;
+
+  const cols=['Статья',...lab,'Итого'];
+  const sum=k=>M.reduce((a,o)=>a+o[k],0);
+  const row=(name,k,type)=>({name,type,vals:[...M.map(o=>o[k]),sum(k)]});
+  table(document.getElementById('t1'),cols,[
+    row('Инвестиции','capex','b'),
+    {name:'Загрузка, %',vals:[...M.map(o=>o.occ),''],fmt:v=>pct(v,0)},
+    {name:'Средний тариф, ₸',vals:[...M.map(o=>o.tar),'']},
+    row('Выручка от размещения','acc'),
+    row('Дополнительные доходы','add'),
+    row('Выручка','rev','b'),
+    row('Переменные расходы','varc'), row('Маркетинг','mkt'), row('Оплата труда','fot'),
+    row('Коммунальные','util'), row('Ремонт','rep'), row('Управление и прочие','adm'),
+    row('EBITDA','ebitda','b'),
+    row('Амортизация','amort'), row('Проценты','int'), row('КПН','citv'),
+    row('Чистая прибыль','np','b'),
+    {name:'Остаток долга',vals:[...M.map(o=>o.debt),'']},
+    {name:'DSCR',type:'b',vals:[...M.map(o=>o.dscr===null?'—':o.dscr),''],fmt:v=>typeof v==='number'?fmt(v,2):v},
+    row('Стоимость объекта при выходе','term'),
+    row('Денежный поток проекта','fcf','b'),
+    row('Денежный поток собственника','fcfe','b'),
+    {name:'Накопленный дисконтированный поток',type:'b',vals:[...M.map(o=>o.cum),'']}
+  ]);
+}
+run();
+</script>
+</body>
+</html>

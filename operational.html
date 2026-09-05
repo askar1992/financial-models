@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Цех полуфабрикатов — операционная модель</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="top"><div class="wrap">
+  <a class="back" href="index.html">← ко всем моделям</a>
+  <h1>Цех полуфабрикатов — операционная модель</h1>
+  <p>Выручка считается из объёмов и цен, себестоимость — из рецептуры, зарплаты — из фонда оплаты труда. 36 месяцев, отсрочки покупателям и поставщикам, запас сырья, НДС, кредит. Данные синтетические.</p>
+</div></div>
+
+<div class="wrap">
+<div class="layout">
+  <div class="panel inputs"><h2>Вводные</h2><div class="body" id="inp"></div></div>
+  <div>
+    <div class="kpis" id="kpi"></div>
+    <div class="charts">
+      <div class="chartbox"><h3>Выручка и маржинальная прибыль</h3><div class="cw"><canvas id="c1"></canvas></div></div>
+      <div class="chartbox"><h3>EBITDA по месяцам</h3><div class="cw"><canvas id="c2"></canvas></div></div>
+      <div class="chartbox"><h3>Остаток денег на счёте</h3><div class="cw"><canvas id="c3"></canvas></div></div>
+      <div class="chartbox"><h3>Структура затрат за 3 года</h3><div class="cw"><canvas id="c4"></canvas></div></div>
+      <div class="chartbox wide"><h3>Объёмы производства по продуктам, кг в месяц</h3><div class="cw"><canvas id="c5"></canvas></div></div>
+    </div>
+    <div class="panel" style="margin-bottom:20px"><h2>Итоги по годам</h2><div class="tablewrap" id="t0"></div></div>
+    <div class="panel" style="margin-bottom:20px"><h2>Прибыли и убытки по месяцам</h2><div class="tablewrap" id="t1"></div></div>
+    <div class="panel" style="margin-bottom:20px"><h2>Движение денежных средств по месяцам</h2><div class="tablewrap" id="t2"></div></div>
+    <p class="note">Пример из витрины. Все цифры условные и не относятся к какому-либо действующему бизнесу.</p>
+  </div>
+</div>
+</div>
+<div class="foot"><div class="wrap">Примеры финансовых моделей. Данные во всех примерах синтетические.</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="assets/app.js"></script>
+<script>
+const host=document.getElementById('inp'); const G={};
+const SKU=[{n:'Пельмени'},{n:'Котлеты'},{n:'Вареники'}];
+const DEF=[[2450,9000,1650,0.025],[2150,5500,1450,0.02],[1750,3500,1150,0.03]];
+SKU.forEach((s,i)=>{
+  group(host,s.n);
+  s.price=field(host,{label:'Цена, ₸/кг',min:800,max:5000,step:25,value:DEF[i][0],fmt:v=>fmt(v)+' ₸'},run);
+  s.qty  =field(host,{label:'Объём, кг в месяц',min:0,max:25000,step:250,value:DEF[i][1]},run);
+  s.raw  =field(host,{label:'Сырьё, ₸/кг',min:300,max:3500,step:25,value:DEF[i][2],fmt:v=>fmt(v)+' ₸'},run);
+  s.gr   =field(host,{label:'Прирост объёма, % в месяц',min:0,max:0.08,step:0.0025,value:DEF[i][3],fmt:v=>pct(v)},run);
+});
+group(host,'Производство');
+G.pkg =field(host,{label:'Упаковка, ₸/кг',min:0,max:300,step:5,value:85,fmt:v=>fmt(v)+' ₸'},run);
+G.loss=field(host,{label:'Технологические потери, %',min:0,max:0.12,step:0.005,value:0.03,fmt:v=>pct(v,1)},run);
+G.log =field(host,{label:'Логистика, ₸/кг',min:0,max:200,step:5,value:45,fmt:v=>fmt(v)+' ₸'},run);
+G.mkt =field(host,{label:'Маркетинг, % от выручки',min:0,max:0.1,step:0.005,value:0.02,fmt:v=>pct(v,1)},run);
+group(host,'Персонал и постоянные расходы');
+G.fotP=field(host,{label:'ФОТ производства, ₸/мес',min:1000000,max:12000000,step:100000,value:3650000,fmt:v=>mln(v)},run);
+G.fotA=field(host,{label:'ФОТ администрации, ₸/мес',min:500000,max:8000000,step:100000,value:1650000,fmt:v=>mln(v)},run);
+G.ftx =field(host,{label:'Налоги с ФОТ, %',min:0,max:0.5,step:0.01,value:0.27,fmt:v=>pct(v,0)},run);
+G.idx =field(host,{label:'Индексация окладов, % в год',min:0,max:0.25,step:0.01,value:0.08,fmt:v=>pct(v,0)},run);
+G.rent=field(host,{label:'Аренда цеха и склада, ₸/мес',min:200000,max:6000000,step:50000,value:1400000,fmt:v=>fmt(v)+' ₸'},run);
+G.util=field(host,{label:'Коммунальные, ₸/мес',min:50000,max:2000000,step:10000,value:380000,fmt:v=>fmt(v)+' ₸'},run);
+G.oth =field(host,{label:'Обслуживание, связь, прочее, ₸/мес',min:50000,max:2000000,step:10000,value:530000,fmt:v=>fmt(v)+' ₸'},run);
+group(host,'Оборотный капитал и налоги');
+G.dso =field(host,{label:'Оплата покупателями в том же месяце, %',min:0,max:1,step:0.05,value:0.55,fmt:v=>pct(v,0)},run);
+G.dpo =field(host,{label:'Оплата сырья в том же месяце, %',min:0,max:1,step:0.05,value:0.7,fmt:v=>pct(v,0)},run);
+G.stk =field(host,{label:'Запас сырья, дней',min:0,max:60,step:5,value:20},run);
+G.vat =field(host,{label:'Ставка НДС, %',min:0,max:0.2,step:0.01,value:0.16,fmt:v=>pct(v,0)},run);
+G.cit =field(host,{label:'Ставка КПН, %',min:0,max:0.3,step:0.01,value:0.2,fmt:v=>pct(v,0)},run);
+group(host,'Инвестиции и финансирование');
+G.cap =field(host,{label:'Оборудование и запуск, ₸',min:10000000,max:200000000,step:2000000,value:68000000,fmt:v=>mln(v)},run);
+G.am  =field(host,{label:'Срок амортизации, лет',min:3,max:15,step:1,value:7},run);
+G.eq  =field(host,{label:'Собственные средства, ₸',min:10000000,max:250000000,step:2000000,value:68000000,fmt:v=>mln(v)},run);
+G.debt=field(host,{label:'Кредит, ₸',min:0,max:200000000,step:2000000,value:40000000,fmt:v=>mln(v)},run);
+G.rate=field(host,{label:'Ставка по кредиту, % годовых',min:0,max:0.35,step:0.005,value:0.19,fmt:v=>pct(v,1)},run);
+G.term=field(host,{label:'Срок кредита, мес.',min:12,max:84,step:6,value:36},run);
+G.gp  =field(host,{label:'Отсрочка погашения тела, мес.',min:0,max:24,step:1,value:6},run);
+
+const CH={};
+function chart(id,cfg){ if(CH[id]){CH[id].data=cfg.data;CH[id].options=cfg.options;CH[id].update();}
+  else CH[id]=new Chart(document.getElementById(id),cfg); }
+
+function model(){
+  const p={}; for(const k in G) p[k]=G[k]();
+  const S=SKU.map(s=>({n:s.n,price:s.price(),qty0:s.qty(),raw:s.raw(),gr:s.gr()}));
+  const N=36, M=[];
+  let debt=p.debt, prevEnd=0;
+  for(let i=0;i<N;i++){
+    const o={q:[]};
+    S.forEach((s,k)=> o.q[k] = i===0? s.qty0 : M[i-1].q[k]*(1+s.gr));
+    o.rev = S.reduce((a,s,k)=>a+o.q[k]*s.price,0);
+    o.qty = o.q.reduce((a,b)=>a+b,0);
+    o.raw = -S.reduce((a,s,k)=>a+o.q[k]*s.raw,0)*(1+p.loss);
+    o.pkg = -o.qty*p.pkg;
+    o.logi= -o.qty*p.log;
+    o.mkt = -o.rev*p.mkt;
+    o.varc= o.raw+o.pkg+o.logi+o.mkt;
+    o.cm  = o.rev+o.varc;
+    const yi=Math.floor(i/12), k=Math.pow(1+p.idx,yi);
+    o.fotP=-p.fotP*(1+p.ftx)*k; o.fotA=-p.fotA*(1+p.ftx)*k;
+    o.rent=-p.rent; o.util=-p.util; o.othf=-p.oth;
+    o.fix = o.fotP+o.fotA+o.rent+o.util+o.othf;
+    o.ebitda=o.cm+o.fix;
+    o.amort=-p.cap/p.am/12;
+    o.int = -debt*p.rate/12;
+    o.ebt = o.ebitda+o.amort+o.int;
+    o.citv= -Math.max(0,o.ebt)*p.cit;
+    o.np  = o.ebt+o.citv;
+    // CF
+    o.beg=prevEnd;
+    const prev=i>0?M[i-1]:null;
+    o.inc = ((o.rev*p.dso)+(prev? prev.rev*(1-p.dso):0))*(1+p.vat);
+    o.pay = (((o.raw+o.pkg)*p.dpo)+(prev? (prev.raw+prev.pkg)*(1-p.dpo):0))*(1+p.vat);
+    o.stock = i===0? (o.raw+o.pkg)*p.stk/30*(1+p.vat) : 0;
+    o.opxc= o.logi+o.mkt+o.fix;
+    o.vatp= -Math.max(0,(o.rev+o.raw+o.pkg)*p.vat);
+    o.principal = (i+1<=p.gp || debt<=0) ? 0 : -Math.min(p.debt/(p.term-p.gp), debt);
+    o.capex = i===0? -p.cap:0;
+    o.fin   = i===0? (p.eq+p.debt):0;
+    o.net = o.inc+o.pay+o.stock+o.opxc+o.vatp+o.citv+o.int+o.principal+o.capex+o.fin;
+    o.end = o.beg+o.net; prevEnd=o.end;
+    debt = Math.max(0, debt + o.principal);
+    o.debt=debt;
+    M.push(o);
+  }
+  return {p,S,M};
+}
+
+function run(){
+  const {p,S,M}=model();
+  const lab=M.map((_,i)=>'М'+(i+1));
+  const yr=(k,y)=>M.slice(y*12,y*12+12).reduce((a,o)=>a+o[k],0);
+  const sum=k=>M.reduce((a,o)=>a+o[k],0);
+  const minEnd=Math.min(...M.map(o=>o.end));
+  const firstEb=M.findIndex(o=>o.ebitda>0);
+
+  kpi(document.getElementById('kpi'),[
+    {l:'Выручка за 3 года',v:mln(sum('rev'))},
+    {l:'EBITDA за 3 года',v:mln(sum('ebitda')),cls:sum('ebitda')>=0?'pos':'neg'},
+    {l:'Рентабельность по EBITDA, год 3',v:pct(yr('rev',2)?yr('ebitda',2)/yr('rev',2):0)},
+    {l:'Чистая прибыль, год 3',v:mln(yr('np',2)),cls:yr('np',2)>=0?'pos':'neg'},
+    {l:'Минимальный остаток',v:mln(minEnd),cls:minEnd<0?'neg':''},
+    {l:'EBITDA выходит в плюс',v: firstEb>=0? 'М'+(firstEb+1):'нет'}
+  ]);
+
+  chart('c1',{type:'line',data:{labels:lab,datasets:[
+    {label:'Выручка',data:M.map(o=>o.rev),borderColor:PAL[0],backgroundColor:'rgba(46,90,136,.10)',fill:true,tension:.25,pointRadius:0},
+    {label:'Маржинальная прибыль',data:M.map(o=>o.cm),borderColor:PAL[1],tension:.25,pointRadius:0}]},options:baseOpts()});
+  chart('c2',{type:'bar',data:{labels:lab,datasets:[{label:'EBITDA',data:M.map(o=>o.ebitda),
+    backgroundColor:M.map(o=>o.ebitda>=0?PAL[2]:PAL[3]),borderRadius:2}]},options:baseOpts()});
+  chart('c3',{type:'line',data:{labels:lab,datasets:[{label:'Остаток на счёте',data:M.map(o=>o.end),
+    borderColor:PAL[0],backgroundColor:'rgba(46,90,136,.12)',fill:true,tension:.25,pointRadius:0}]},options:baseOpts()});
+  const cost=[['Сырьё','raw'],['Упаковка','pkg'],['Логистика','logi'],['Маркетинг','mkt'],
+              ['ФОТ производства','fotP'],['ФОТ администрации','fotA'],['Аренда','rent'],
+              ['Коммунальные','util'],['Прочие постоянные','othf']].map(([n,k])=>[n,Math.abs(sum(k))]);
+  const tot=cost.reduce((a,b)=>a+b[1],0);
+  chart('c4',{type:'doughnut',data:{labels:cost.map(c=>c[0]),datasets:[{data:cost.map(c=>c[1]),backgroundColor:PAL,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+      plugins:{legend:{position:'right',labels:{boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'circle',font:{size:10.5}}},
+        tooltip:{callbacks:{label:c=>` ${c.label}: ${mln(c.parsed)} (${pct(c.parsed/tot)})`}}}}});
+  chart('c5',{type:'line',data:{labels:lab,datasets:S.map((s,k)=>({label:s.n,data:M.map(o=>o.q[k]),
+    borderColor:PAL[k],tension:.25,pointRadius:0}))},options:baseOpts()});
+
+  // свод по годам
+  const yrs=['Год 1','Год 2','Год 3'];
+  const rowY=(name,k,type)=>({name,type,vals:[0,1,2].map(y=>yr(k,y))});
+  table(document.getElementById('t0'),['Показатель',...yrs],[
+    rowY('Выручка','rev','b'),
+    rowY('Переменные затраты','varc'),
+    rowY('Маржинальная прибыль','cm','b'),
+    rowY('Постоянные расходы','fix'),
+    rowY('EBITDA','ebitda','b'),
+    rowY('Амортизация','amort'),
+    rowY('Проценты по кредиту','int'),
+    rowY('Корпоративный подоходный налог','citv'),
+    rowY('Чистая прибыль','np','b'),
+    {name:'Рентабельность по EBITDA',type:'',vals:[0,1,2].map(y=>yr('rev',y)?yr('ebitda',y)/yr('rev',y):0),fmt:v=>pct(v)},
+    {name:'Остаток на счёте на конец года',type:'b',vals:[0,1,2].map(y=>M[y*12+11].end)}
+  ]);
+
+  const cols=['Статья',...lab,'Итого'];
+  const row=(name,k,type)=>({name,type,vals:[...M.map(o=>o[k]),sum(k)]});
+  table(document.getElementById('t1'),cols,[
+    ...S.map((s,k)=>({name:'Объём: '+s.n+', кг',vals:[...M.map(o=>Math.round(o.q[k])),'']})),
+    row('Выручка','rev','b'),
+    row('Сырьё','raw'), row('Упаковка','pkg'), row('Логистика','logi'), row('Маркетинг','mkt'),
+    row('Маржинальная прибыль','cm','b'),
+    row('ФОТ производства','fotP'), row('ФОТ администрации','fotA'),
+    row('Аренда','rent'), row('Коммунальные','util'), row('Прочие постоянные','othf'),
+    row('EBITDA','ebitda','b'),
+    row('Амортизация','amort'), row('Проценты','int'), row('КПН','citv'),
+    row('Чистая прибыль','np','b')
+  ]);
+  table(document.getElementById('t2'),cols,[
+    {name:'Остаток на начало',vals:[...M.map(o=>o.beg),'']},
+    row('Поступления от покупателей','inc'),
+    row('Оплата сырья и упаковки','pay'),
+    row('Формирование запаса сырья','stock'),
+    row('Прочие расходы','opxc'),
+    row('НДС','vatp'), row('КПН','citv'), row('Проценты','int'),
+    row('Погашение тела кредита','principal'),
+    row('Инвестиции','capex'), row('Собственные средства и кредит','fin'),
+    row('Кассовый итог','net','b'),
+    {name:'Остаток на конец',type:'b',vals:[...M.map(o=>o.end),'']},
+    {name:'Остаток долга',vals:[...M.map(o=>o.debt),'']}
+  ]);
+}
+run();
+</script>
+</body>
+</html>
